@@ -10,6 +10,7 @@ const ussdRoutes = require('./routes/ussd');
 const paymentRoutes = require('./routes/payments');
 const userRoutes = require('./routes/users');
 const planRoutes = require('./routes/plans');
+const AfricasTalkingController = require('./controllers/AfricasTalkingController');
 
 // Initialize Express app
 const app = express();
@@ -48,6 +49,13 @@ app.get('/', (req, res) => {
     documentation: '/api/docs'
   });
 });
+
+// Africa's Talking USSD Test Endpoint (for development)
+// Simulate an AT USSD request
+app.post('/api/ussd/test/simulate', AfricasTalkingController.simulateUSSDRequest);
+
+// Get session details (for debugging)
+app.get('/api/ussd/session/:sessionId', AfricasTalkingController.getSessionDetails);
 
 // 404 Handler
 app.use((req, res) => {

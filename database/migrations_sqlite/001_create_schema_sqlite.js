@@ -1,0 +1,76 @@
+exports.up = async function(knex) {
+  await knex.schema.createTableIfNotExists('users', table => {
+    table.string('id').primary()
+    table.string('phone').notNullable()
+    table.string('name').notNullable()
+    table.string('email')
+    table.string('occupation')
+    table.string('income_range')
+    table.string('preferred_language').defaultTo('en')
+    table.timestamp('created_at').defaultTo(knex.fn.now())
+    table.timestamp('updated_at').defaultTo(knex.fn.now())
+  })
+
+  await knex.schema.createTableIfNotExists('plans', table => {
+    table.string('id').primary()
+    table.string('name').notNullable()
+    table.string('coverage_type')
+    table.text('description')
+    table.integer('min_premium').defaultTo(0)
+    table.integer('max_premium').defaultTo(0)
+    table.integer('max_coverage').defaultTo(0)
+    table.integer('coverage_multiplier').defaultTo(0)
+    table.json('benefits')
+    table.boolean('active').defaultTo(true)
+    table.timestamp('created_at').defaultTo(knex.fn.now())
+    table.timestamp('updated_at').defaultTo(knex.fn.now())
+  })
+
+  await knex.schema.createTableIfNotExists('policies', table => {
+    table.string('id').primary()
+    table.string('user_id').references('id').inTable('users')
+    table.string('plan_id').references('id').inTable('plans')
+    table.string('policy_number')
+    table.integer('premium')
+    table.integer('coverage_amount')
+    table.string('status')
+    table.date('start_date')
+    table.date('end_date')
+    table.boolean('auto_renew').defaultTo(false)
+    table.timestamp('created_at').defaultTo(knex.fn.now())
+    table.timestamp('updated_at').defaultTo(knex.fn.now())
+  })
+
+  await knex.schema.createTableIfNotExists('payments', table => {
+    table.string('id').primary()
+    table.string('user_id').references('id').inTable('users')
+    table.string('policy_id').references('id').inTable('policies')
+    table.integer('amount')
+    table.string('currency').defaultTo('KES')
+    table.string('payment_method')
+    table.string('status')
+    table.string('transaction_id')
+    table.string('mpesa_receipt')
+    table.string('mpesa_phone')
+    table.string('period')
+    table.timestamp('paid_date')
+    table.timestamp('created_at').defaultTo(knex.fn.now())
+  })
+
+  await knex.schema.createTableIfNotExists('sessions', table => {
+    table.string('id').primary()
+    table.string('user_id').references('id').inTable('users')
+    table.string('phone')
+    table.text('text')
+    table.json('data')
+    table.timestamp('created_at').defaultTo(knex.fn.now())
+  })
+}
+
+exports.down = async function(knex) {
+  await knex.schema.dropTableIfExists('sessions')
+  await knex.schema.dropTableIfExists('payments')
+  await knex.schema.dropTableIfExists('policies')
+  await knex.schema.dropTableIfExists('plans')
+  await knex.schema.dropTableIfExists('users')
+}

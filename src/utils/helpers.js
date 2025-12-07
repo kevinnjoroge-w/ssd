@@ -43,6 +43,13 @@ class Helpers {
   }
 
   /**
+   * Generate USSD session ID
+   */
+  static generateSessionId() {
+    return `SESSION-${Date.now()}-${Math.random().toString(36).substring(7)}`.toUpperCase();
+  }
+
+  /**
    * Format currency
    */
   static formatCurrency(amount, currency = 'KES') {

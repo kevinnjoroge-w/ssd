@@ -1,10 +1,15 @@
 const express = require('express');
 const USSDController = require('../controllers/USSDController');
+const AfricasTalkingController = require('../controllers/AfricasTalkingController');
 
 const router = express.Router();
 
-// USSD request handler
+// Standard USSD request handler (for testing)
 router.post('/', USSDController.handleUSSD);
+
+// Africa's Talking USSD callback endpoint
+// This is where AT sends incoming USSD requests
+router.post('/callback', AfricasTalkingController.handleATCallback);
 
 // User registration
 router.post('/register', USSDController.registerUser);
