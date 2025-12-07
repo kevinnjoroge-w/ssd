@@ -76,9 +76,20 @@ app.use((err, req, res, next) => {
 
 // Start Server
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log(`✓ Server running on port ${PORT}`);
-  console.log(`✓ Environment: ${process.env.NODE_ENV}`);
+  console.log(`✓ Environment: ${process.env.NODE_ENV || 'development'}`);
+});
+
+// Handle server errors (e.g. port already in use)
+server.on('error', (err) => {
+  if (err && err.code === 'EADDRINUSE') {
+    console.error(`✗ Port ${PORT} is already in use.`);
+    console.error('Tip: On Windows run `netstat -ano | findstr :' + PORT + '` to find the PID, then `taskkill /PID <pid> /F` to free the port.');
+    process.exit(1);
+  }
+  console.error('Server error:', err);
+  process.exit(1);
 });
 
 module.exports = app;
