@@ -174,7 +174,7 @@ class AfricasTalkingService {
       sessionId,
       phoneNumber,
       input,
-      response: response.substring(0, 100), // First 100 chars
+      response: response ? String(response).substring(0, 100) : '', // First 100 chars (defensive)
       duration,
       status: 'success'
     };

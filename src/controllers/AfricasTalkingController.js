@@ -49,7 +49,8 @@ class AfricasTalkingController {
         session = await DataService.upsertSession(sessionId, formattedPhone, {
           status: 'active',
           current_menu: 'main',
-          session_data: {}
+          session_data: {},
+          operator: callbackData.networkOperator || 'Unknown'
         });
       }
 
@@ -64,27 +65,85 @@ class AfricasTalkingController {
       // Parse user input
       const parsedInput = AfricasTalkingService.parseInput(text);
 
-      // Process USSD menu
-      const ussdResponse = USSDService.processUSSD(
+      // Process USSD menu (pass current session state)
+      const ussdResponse = await USSDService.processUSSD(
         sessionId,
         formattedPhone,
         text,
-        user
+        user,
+        session.current_menu,
+        session.session_data || {}
       );
 
       // Update session with current state
-      const sessionData = {
+      let sessionData = {
         current_menu: ussdResponse.nextMenu,
         user_input: text,
         operator: callbackData.networkOperator,
         updated_at: new Date().toISOString()
       };
 
+      // Merge any session_data updates returned by the USSD flow
+      if (ussdResponse.updates) {
+        if (ussdResponse.updates.session_data) {
+          sessionData.session_data = Object.assign({}, session.session_data || {}, ussdResponse.updates.session_data);
+        }
+        // copy other update keys if present
+        Object.keys(ussdResponse.updates).forEach((k) => {
+          if (k === 'session_data') return;
+          sessionData[k] = ussdResponse.updates[k];
+        });
+      }
+
+      // sessionData logged during development; removed verbose logging
+
       if (!ussdResponse.continueSession) {
         sessionData.status = 'ended';
       }
 
-      await DataService.upsertSession(sessionId, formattedPhone, sessionData);
+      // Persist session and retrieve latest
+      session = await DataService.upsertSession(sessionId, formattedPhone, sessionData);
+
+      // Handle post-menu actions (create or update user)
+      if (ussdResponse.action === 'create_user') {
+        try {
+          const sd = session.session_data || {};
+          const created = await DataService.getOrCreateUser(formattedPhone, sd.name || null);
+          if (created && (sd.occupation || sd.income_range || sd.name)) {
+            await DataService.updateUserProfile(created.id, {
+              name: sd.name,
+              occupation: sd.occupation,
+              income_range: sd.income_range
+            });
+          }
+          user = created;
+        } catch (e) {
+          console.error('Session action create_user error:', e);
+        }
+      } else if (ussdResponse.action === 'update_user') {
+        try {
+          const sd = session.session_data || {};
+          if (user) {
+            await DataService.updateUserProfile(user.id, {
+              name: sd.name,
+              occupation: sd.occupation,
+              income_range: sd.income_range
+            });
+          } else {
+            const created = await DataService.getOrCreateUser(formattedPhone, sd.name || null);
+            if (created) {
+              await DataService.updateUserProfile(created.id, {
+                name: sd.name,
+                occupation: sd.occupation,
+                income_range: sd.income_range
+              });
+              user = created;
+            }
+          }
+        } catch (e) {
+          console.error('Session action update_user error:', e);
+        }
+      }
 
       // Format and send response
       const atResponse = AfricasTalkingService.formatATResponse(
@@ -111,11 +170,23 @@ class AfricasTalkingController {
     } catch (error) {
       console.error('[Africa\'s Talking Error]', error);
 
-      // Send error response
-      const errorResponse = AfricasTalkingService.formatATResponse(
-        'An error occurred. Please try again later or dial *123# to restart.',
-        false
-      );
+      // Try to persist an error state for this session so it can be resumed
+      try {
+        if (sessionId && phoneNumber) {
+          const formattedPhoneErr = AfricasTalkingService.formatPhoneNumber(phoneNumber);
+          await DataService.upsertSession(sessionId, formattedPhoneErr, {
+            current_menu: 'error',
+            status: 'error',
+            updated_at: new Date().toISOString()
+          });
+        }
+      } catch (persistErr) {
+        console.error('Failed to persist session error state:', persistErr);
+      }
+
+      // Return a friendly retry prompt (keep session open so user can choose)
+        const friendlyMessage = "Sorry, we couldn't complete your request right now.\n1. Try again\n2. Exit";
+      const errorResponse = AfricasTalkingService.formatATResponse(friendlyMessage, true);
 
       res.set('Content-Type', 'text/plain');
       res.send(errorResponse);

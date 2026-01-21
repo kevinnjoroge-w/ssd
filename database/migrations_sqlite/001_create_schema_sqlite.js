@@ -52,6 +52,7 @@ exports.up = async function(knex) {
     table.string('transaction_id')
     table.string('mpesa_receipt')
     table.string('mpesa_phone')
+    table.date('due_date')
     table.string('period')
     table.timestamp('paid_date')
     table.timestamp('created_at').defaultTo(knex.fn.now())
@@ -59,10 +60,17 @@ exports.up = async function(knex) {
 
   await knex.schema.createTableIfNotExists('sessions', table => {
     table.string('id').primary()
+    table.string('session_id').unique()
     table.string('user_id').references('id').inTable('users')
     table.string('phone')
     table.text('text')
     table.json('data')
+    table.string('current_menu')
+    table.string('user_input')
+    table.json('session_data')
+    table.string('language').defaultTo('en')
+    table.string('status').defaultTo('active')
+    table.timestamp('expires_at')
     table.timestamp('created_at').defaultTo(knex.fn.now())
   })
 }

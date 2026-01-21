@@ -18,7 +18,7 @@ class PaymentController {
 
       // Create payment record
       const transactionId = uuidv4();
-      await DataService.createPayment(userId, policyId, amount, 'mpesa', transactionId);
+      const payment = await DataService.createPayment(userId, policyId, amount, 'mpesa', transactionId);
 
       // Initiate STK Push
       const stkResult = await MpesaService.initiateStkPush(
@@ -28,11 +28,19 @@ class PaymentController {
         description || 'Insurance Premium Payment'
       );
 
+      // Attach M-Pesa identifiers to the payment record for later callback matching
+      const checkoutRequestId = stkResult.data && stkResult.data.CheckoutRequestID ? stkResult.data.CheckoutRequestID : stkResult.checkoutRequestId;
+      const merchantRequestId = stkResult.data && stkResult.data.MerchantRequestID ? stkResult.data.MerchantRequestID : null;
+
+      if (checkoutRequestId || merchantRequestId) {
+        await DataService.attachMpesaIds(transactionId, checkoutRequestId, merchantRequestId);
+      }
+
       res.json({
         success: stkResult.success,
         message: stkResult.success ? 'STK push sent successfully' : 'Failed to send STK push',
         data: {
-          checkoutRequestId: stkResult.checkoutRequestId,
+          checkoutRequestId: checkoutRequestId,
           transactionId: transactionId,
           amount: amount,
           phoneNumber: phoneNumber

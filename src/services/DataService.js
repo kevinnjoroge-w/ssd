@@ -47,25 +47,29 @@ class DataService {
    */
   static async upsertSession(sessionId, phone, updates = {}) {
     try {
+      console.log('[DataService] upsertSession called for', sessionId, 'with updates:', updates);
       let session = await Session.query().findOne({ session_id: sessionId });
       
       if (session) {
-        return await Session.query()
+        // Use a two-step approach to support sqlite which doesn't support RETURNING
+        await Session.query()
           .patch({
             ...updates,
             updated_at: new Date().toISOString()
           })
-          .where('session_id', sessionId)
-          .returning('*')
-          .first();
+          .where('session_id', sessionId);
+
+        return await Session.query().findOne({ session_id: sessionId });
       } else {
-        return await Session.query().insert({
+        const insertData = {
           id: uuidv4(),
           session_id: sessionId,
           phone,
           ...updates,
-          expires_at: new Date(Date.now() + 30 * 60 * 1000) // 30 mins expiry
-        });
+          expires_at: new Date(Date.now() + 30 * 60 * 1000).toISOString() // 30 mins expiry
+        };
+
+        return await Session.query().insert(insertData);
       }
     } catch (error) {
       console.error('Session upsert error:', error);
@@ -168,18 +172,42 @@ class DataService {
    */
   static async updatePaymentStatus(transactionId, status, mpesaReceipt, mpesaPhone) {
     try {
-      return await Payment.query()
-        .patch({
-          status,
-          mpesa_receipt: mpesaReceipt,
-          mpesa_phone: mpesaPhone,
-          paid_date: status === 'completed' ? new Date().toISOString() : null
-        })
-        .where('transaction_id', transactionId)
-        .returning('*')
-        .first();
+      // Support finding by transaction id OR merchant/checkout ids
+      const patchData = {
+        status,
+        mpesa_receipt: mpesaReceipt,
+        mpesa_phone: mpesaPhone,
+        paid_date: status === 'completed' ? new Date().toISOString() : null,
+        updated_at: new Date().toISOString()
+      };
+
+      await Payment.query().patch(patchData).where(builder => {
+        builder.where('transaction_id', transactionId).orWhere('merchant_request_id', transactionId).orWhere('checkout_request_id', transactionId);
+      });
+
+      // Return the updated payment
+      return await Payment.query().where('transaction_id', transactionId).orWhere('merchant_request_id', transactionId).orWhere('checkout_request_id', transactionId).first();
     } catch (error) {
       console.error('Payment update error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Attach M-Pesa IDs to an existing payment record
+   */
+  static async attachMpesaIds(transactionId, checkoutRequestId, merchantRequestId) {
+    try {
+      const patch = {};
+      if (checkoutRequestId) patch.checkout_request_id = checkoutRequestId;
+      if (merchantRequestId) patch.merchant_request_id = merchantRequestId;
+      patch.updated_at = new Date().toISOString();
+
+      await Payment.query().patch(patch).where('transaction_id', transactionId);
+
+      return await Payment.query().findOne({ transaction_id: transactionId });
+    } catch (error) {
+      console.error('Attach M-Pesa IDs error:', error);
       throw error;
     }
   }
@@ -204,11 +232,8 @@ class DataService {
    */
   static async updateUserProfile(userId, updates) {
     try {
-      return await User.query()
-        .patch(updates)
-        .where('id', userId)
-        .returning('*')
-        .first();
+      await User.query().patch(updates).where('id', userId);
+      return await User.query().findOne({ id: userId });
     } catch (error) {
       console.error('User update error:', error);
       throw error;
