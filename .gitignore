@@ -1,0 +1,59 @@
+.DS_Store
+Thumbs.db
+
+# Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Environment
+.env
+.env.*.local
+.env.local
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# Coverage
+coverage/
+.nyc_output/
+coverage-final.json
+lcov.info
+
+# Build
+dist/
+build/
+public/build/
+
+# SQLite / DB files
+*.sqlite
+*.sqlite3
+*.db
+database/*.db
+database/*.sqlite
+database/*.sqlite3
+
+# IDEs and editors
+.idea/
+.vscode/
+*.sublime-workspace
+*.sublime-project
+
+# OS files
+ehthumbs.db
+Icon?
+
+# Test output
+/reports/
+
+# Temporary
+tmp/
+temp/
+*.tmp
+
+# Misc
+.coverage
