@@ -23,30 +23,30 @@
         <div class='clearfix'>
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">30.95% </span>
+                <span class="strong">9.52% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>13/42</span>
+                <span class='fraction'>4/42</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">19.35% </span>
+                <span class="strong">0% </span>
                 <span class="quiet">Branches</span>
-                <span class='fraction'>6/31</span>
+                <span class='fraction'>0/31</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">25% </span>
+                <span class="strong">0% </span>
                 <span class="quiet">Functions</span>
-                <span class='fraction'>1/4</span>
+                <span class='fraction'>0/4</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">30.95% </span>
+                <span class="strong">9.52% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>13/42</span>
+                <span class='fraction'>4/42</span>
             </div>
         
             
@@ -212,21 +212,21 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">3x</span>
-<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">3x</span>
-<span class="cline-any cline-yes">1x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">2x</span>
-<span class="cline-any cline-yes">2x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -252,8 +252,8 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">2x</span>
-<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -351,26 +351,26 @@ class PaymentController {
   /**
    * Initiate M-Pesa payment
    */
-  static async initiateMpesaPayment(req, res) {
-    try {
-      const { userId, policyId, amount, phoneNumber, description } = req.body;
+<span class="fstat-no" title="function not covered" >  st</span>atic async initiateMpesaPayment(req, res) {
+<span class="cstat-no" title="statement not covered" >    try {</span>
+      const { userId, policyId, amount, phoneNumber, description } = <span class="cstat-no" title="statement not covered" >req.body;</span>
 &nbsp;
-      if (!userId || !amount || !phoneNumber) {
-        return res.status(400).json({
+<span class="cstat-no" title="statement not covered" >      if (!userId || !amount || !phoneNumber) {</span>
+<span class="cstat-no" title="statement not covered" >        return res.status(400).json({</span>
           error: 'Missing required fields'
         });
       }
 &nbsp;
       // Create payment record
-      const transactionId = uuidv4();
-      const payment = await DataService.createPayment(userId, policyId, amount, 'mpesa', transactionId);
+      const transactionId = <span class="cstat-no" title="statement not covered" >uuidv4();</span>
+      const payment = <span class="cstat-no" title="statement not covered" >await DataService.createPayment(userId, policyId, amount, 'mpesa', transactionId);</span>
 &nbsp;
       // Initiate STK Push
-      const stkResult = await MpesaService.initiateStkPush(
+      const stkResult = <span class="cstat-no" title="statement not covered" >await MpesaService.initiateStkPush(</span>
         phoneNumber,
         amount,
         `INS-${transactionId}`,
-        description || <span class="branch-1 cbranch-no" title="branch not covered" >'Insurance Premium Payment'</span>
+        description || 'Insurance Premium Payment'
       );
 &nbsp;
       // Attach M-Pesa identifiers to the payment record for later callback matching
@@ -392,8 +392,8 @@ class PaymentController {
         }
       });
     } catch (error) {
-      console.error('M-Pesa Payment Initiation Error:', error);
-      res.status(500).json({
+<span class="cstat-no" title="statement not covered" >      console.error('M-Pesa Payment Initiation Error:', error);</span>
+<span class="cstat-no" title="statement not covered" >      res.status(500).json({</span>
         error: 'Failed to initiate payment',
         message: error.message
       });
@@ -490,7 +490,7 @@ module.exports = PaymentController;
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2026-02-11T00:12:47.575Z
+                at 2026-03-07T11:54:12.869Z
             </div>
         <script src="../../../prettify.js"></script>
         <script>

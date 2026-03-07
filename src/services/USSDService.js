@@ -2,6 +2,9 @@
 // In-memory USSD service adapted from user-provided flow
 
 const DataService = require('./DataService');
+const User = require('../models/User');
+const FlutterwaveService = require('./FlutterwaveService');
+const { v4: uuidv4 } = require('uuid');
 
 class USSDService {
   /**
@@ -20,9 +23,34 @@ class USSDService {
       });
     }
 
-    const rawText = (text || '');
-    const textArray = rawText === '' ? [''] : rawText.split('*');
-    const level = textArray.length;
+    // 1. Sanitization: Trim text and remove leading/trailing stars (some gateways include them)
+    // Also handle empty or null text
+    let sanitizedText = (text || '').trim();
+    while (sanitizedText.startsWith('*')) sanitizedText = sanitizedText.substring(1);
+    while (sanitizedText.endsWith('*')) sanitizedText = sanitizedText.substring(0, sanitizedText.length - 1);
+
+    const rawText = sanitizedText;
+    let textArray = rawText === '' ? [''] : rawText.split('*').map(t => t.trim());
+
+    // Global transform for authenticated sessions to preserve original sub-flow indices
+    if (session.session_data.authenticated && textArray.length > 1) {
+      const authChoice = textArray[1];
+      const mapping = {
+        '1': '2', // Buy
+        '2': '3', // Policies
+        '3': '4', // Claim
+        '4': '5', // Pay
+        '5': '7', // Balance
+        '6': '6', // Support
+        '0': '0'  // Exit
+      };
+
+      const mappedChoice = mapping[authChoice] || authChoice;
+      textArray = [mappedChoice, 'AUTH_SESSION', ...textArray.slice(2)];
+    }
+
+    let level = textArray.length;
+    console.log(`[USSDService] textArray: ${JSON.stringify(textArray)}, level: ${level}`);
 
     let response = '';
 
@@ -35,9 +63,32 @@ class USSDService {
 
     // Main menu initial
     if (rawText === '') {
+      const user = await User.query().findOne({ phone: phoneNumber });
+      if (user && user.pin) {
+        response = `CON Welcome back, ${user.name}!\nPlease enter your 4-digit PIN:`;
+        return makeResult(response, 'awaiting_pin', true);
+      }
       response = `CON Welcome to SafeCover Insurance\n1. Register\n2. Buy Insurance\n3. My Policies\n4. File a Claim\n5. Pay Premium\n6. Customer Support\n7. Check Balance\n0. Exit`;
       return makeResult(response, 'main', true);
     }
+
+    // Handle PIN Authentication for returning users
+    if (session.current_menu === 'awaiting_pin') {
+      const pin = textArray[level - 1];
+      const user = await User.query().findOne({ phone: phoneNumber });
+
+      if (user && user.pin === pin) {
+        session.session_data.authenticated = true;
+        session.session_data.user = user;
+        response = `CON Success! Select an option:\n1. Buy Insurance\n2. My Policies\n3. File a Claim\n4. Pay Premium\n5. Check Balance\n6. Customer Support\n0. Exit`;
+        return makeResult(response, 'auth_main', true, { session_data: session.session_data });
+      } else {
+        response = `END Invalid PIN. Please try again.`;
+        return makeResult(response, 'end', false);
+      }
+    }
+
+    // (AUTH_MAIN local mapping removed - handled by global transform)
 
     // REGISTRATION FLOW
     if (textArray[0] === '1') {
@@ -51,35 +102,33 @@ class USSDService {
           response = `CON Enter your National ID number:`;
           return makeResult(response, 'register', true);
         } else if (level === 3) {
-          session.data.idNumber = textArray[2];
+          session.session_data.idNumber = textArray[2];
           response = `CON Enter your full name:`;
-          return makeResult(response, 'register', true, { session_data: session.data });
+          return makeResult(response, 'register', true, { session_data: session.session_data });
         } else if (level === 4) {
-          session.data.fullName = textArray[3];
+          session.session_data.fullName = textArray[3];
           response = `CON Enter date of birth (DD/MM/YYYY):`;
-          return makeResult(response, 'register', true, { session_data: session.data });
+          return makeResult(response, 'register', true, { session_data: session.session_data });
         } else if (level === 5) {
-          session.data.dob = textArray[4];
+          session.session_data.dob = textArray[4];
           response = `CON Create a 4-digit PIN:`;
-          return makeResult(response, 'register', true, { session_data: session.data });
+          return makeResult(response, 'register', true, { session_data: session.session_data });
         } else if (level === 6) {
-          session.data.pin = textArray[5];
+          session.session_data.pin = textArray[level - 1];
           response = `CON Confirm your 4-digit PIN:`;
-          return makeResult(response, 'register', true, { session_data: session.data });
+          return makeResult(response, 'register', true, { session_data: session.session_data });
         } else if (level === 7) {
-          const confirmPin = textArray[6];
-          if (confirmPin === session.session_data.pin) {
+          const confirmPin = textArray[level - 1];
+          const originalPin = session.session_data.pin;
+
+          if (confirmPin === originalPin) {
             const accountNumber = 'AC' + Date.now();
             const newUser = await DataService.getOrCreateUser(phoneNumber, session.session_data.fullName);
             await DataService.updateUserProfile(newUser.id, {
+              pin: session.session_data.pin,
               occupation: 'Student', // Default or from session if collected
               income_range: 'low'    // Default
             });
-
-            // We need to store high-level user info if needed, but for now we follow the schema
-            // The original code had a custom `users` object with `pin` and `accountNumber`.
-            // We'll store these in session_data for now or we might need to extend User model.
-            // Let's keep it simple and just acknowledge registration.
 
             response = `END Registration successful!\nAccount Number: ${accountNumber}\nYou can now buy insurance.\nSMS confirmation sent to ${phoneNumber}`;
             return makeResult(response, 'end', false, { session_data: session.session_data });
@@ -95,17 +144,17 @@ class USSDService {
           response = `CON Enter your Account Number:`;
           return makeResult(response, 'login', true);
         } else if (level === 3) {
-          session.data.accountNumber = textArray[2];
+          session.session_data.accountNumber = textArray[2];
           response = `CON Enter your 4-digit PIN:`;
-          return makeResult(response, 'login', true, { session_data: session.data });
+          return makeResult(response, 'login', true, { session_data: session.session_data });
         } else if (level === 4) {
           const pin = textArray[3];
-          const user = await User.query().findOne({ phone: phoneNumber }); // Basic check by phone
-          if (user && session.session_data.accountNumber.includes(user.id.substring(0, 5))) { // Pseudo account check
+          const user = await User.query().findOne({ phone: phoneNumber });
+          if (user && user.pin === pin) {
             response = `END Welcome back, ${user.name}!\nDial ${serviceCode} to access services.`;
             return makeResult(response, 'end', false);
           } else {
-            response = `END Invalid credentials.\nPlease try again.`;
+            response = `END Invalid PIN.\nPlease try again.`;
             return makeResult(response, 'end', false);
           }
         }
@@ -123,15 +172,18 @@ class USSDService {
         return makeResult(response, 'buy', true);
       } else if (level === 2) {
         const pin = textArray[1];
-        const user = await DataService.getOrCreateUser(phoneNumber);
-        if (!user) {
-          response = `END Incorrect PIN or not registered.\nPlease try again.`;
-          return makeResult(response, 'end', false);
+        if (pin === 'AUTH_SESSION' && session.session_data.authenticated) {
+          session.session_data.authenticatedUser = session.session_data.user;
         } else {
+          const user = await DataService.getOrCreateUser(phoneNumber);
+          if (!user || user.pin !== pin) {
+            response = `END Incorrect PIN or not registered.\nPlease try again.`;
+            return makeResult(response, 'end', false);
+          }
           session.session_data.authenticatedUser = user;
-          response = `CON Select Insurance Type:\n1. Life Insurance\n2. Health Insurance\n3. Motor Insurance\n4. Home Insurance\n5. Education Insurance\n0. Back`;
-          return makeResult(response, 'buy', true, { session_data: session.session_data });
         }
+        response = `CON Select Insurance Type:\n1. Life Insurance\n2. Health Insurance\n3. Motor Insurance\n4. Home Insurance\n5. Education Insurance\n0. Back`;
+        return makeResult(response, 'buy', true, { session_data: session.session_data });
       }
       // Life Insurance
       if (textArray[2] === '1') {
@@ -144,18 +196,18 @@ class USSDService {
             '2': { name: 'Standard', premium: 500, cover: 500000 },
             '3': { name: 'Premium', premium: 1000, cover: 2000000 }
           };
-          session.data.selectedPlan = plans[textArray[3]];
+          session.session_data.selectedPlan = plans[textArray[3]];
           response = `CON Enter beneficiary name:`;
-          return makeResult(response, 'buy', true, { session_data: session.data });
+          return makeResult(response, 'buy', true, { session_data: session.session_data });
         } else if (level === 5) {
-          session.data.beneficiaryName = textArray[4];
+          session.session_data.beneficiaryName = textArray[4];
           response = `CON Enter beneficiary phone number:`;
-          return makeResult(response, 'buy', true, { session_data: session.data });
+          return makeResult(response, 'buy', true, { session_data: session.session_data });
         } else if (level === 6) {
-          session.data.beneficiaryPhone = textArray[5];
-          const plan = session.data.selectedPlan;
-          response = `CON Coverage Summary:\nPlan: ${plan.name} Life Cover\nPremium: KES ${plan.premium}/month\nCover: KES ${plan.cover}\nBeneficiary: ${session.data.beneficiaryName}\n\n1. Confirm & Pay\n2. Cancel`;
-          return makeResult(response, 'buy', true, { session_data: session.data });
+          session.session_data.beneficiaryPhone = textArray[5];
+          const plan = session.session_data.selectedPlan;
+          response = `CON Coverage Summary:\nPlan: ${plan.name} Life Cover\nPremium: KES ${plan.premium}/month\nCover: KES ${plan.cover}\nBeneficiary: ${session.session_data.beneficiaryName}\n\n1. Confirm & Pay\n2. Cancel`;
+          return makeResult(response, 'buy', true, { session_data: session.session_data });
         } else if (level === 7) {
           if (textArray[6] === '1') {
             response = `CON Select payment method:\n1. M-PESA\n2. Airtel Money\n3. Pay Later\n0. Back`;
@@ -194,25 +246,18 @@ class USSDService {
             '2': { name: 'Family', premium: 4000 },
             '3': { name: 'Senior Citizen', premium: 2500 }
           };
-          session.data.selectedPlan = plans[textArray[3]];
+          session.session_data.selectedPlan = plans[textArray[3]];
           response = `CON Select payment method:\n1. M-PESA\n2. Airtel Money\n3. Pay Later\n0. Back`;
-          return makeResult(response, 'buy', true, { session_data: session.data });
+          return makeResult(response, 'buy', true, { session_data: session.session_data });
         } else if (level === 5) {
-          const policyNumber = 'POL' + Date.now();
-          const plan = session.data.selectedPlan;
-          const userRec = session.data.authenticatedUser;
-          if (!policies[userRec.accountNumber]) policies[userRec.accountNumber] = [];
-          policies[userRec.accountNumber].push({
-            policyNumber,
-            type: 'Health Insurance',
-            plan: plan.name,
-            premium: plan.premium,
-            status: 'Active',
-            startDate: new Date().toLocaleDateString(),
-            nextDue: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toLocaleDateString()
-          });
-          response = `END Payment successful!\nPolicy Number: ${policyNumber}\nYour ${plan.name} health cover is now active.\nSMS confirmation sent.`;
-          return makeResult(response, 'end', false, { session_data: session.data }, 'create_policy');
+          const plan = session.session_data.selectedPlan;
+          const userRec = session.session_data.authenticatedUser;
+
+          const dbPlan = await DataService.getPlanByCoverageType('basic'); // Fallback or lookup based on selection
+          const policy = await DataService.createPolicy(userRec.id, dbPlan ? dbPlan.id : 'health-plan-id', plan.premium, plan.premium * 500);
+
+          response = `END Payment successful!\nPolicy Number: ${policy.policy_number}\nYour ${plan.name} health cover is now active.\nSMS confirmation sent.`;
+          return makeResult(response, 'end', false, { session_data: session.session_data });
         }
       }
       // Motor Insurance
@@ -221,19 +266,19 @@ class USSDService {
           response = `CON Motor Insurance:\n1. Third Party - KES 5,000/year\n2. Comprehensive - KES 25,000/year\n0. Back`;
           return makeResult(response, 'buy', true);
         } else if (level === 4) {
-          session.data.motorPlan = textArray[3];
+          session.session_data.motorPlan = textArray[3];
           response = `CON Enter vehicle registration number:`;
-          return makeResult(response, 'buy', true, { session_data: session.data });
+          return makeResult(response, 'buy', true, { session_data: session.session_data });
         } else if (level === 5) {
-          session.data.vehicleReg = textArray[4];
+          session.session_data.vehicleReg = textArray[4];
           response = `CON Enter vehicle make and model:\nExample: Toyota Corolla`;
-          return makeResult(response, 'buy', true, { session_data: session.data });
+          return makeResult(response, 'buy', true, { session_data: session.session_data });
         } else if (level === 6) {
-          session.data.vehicleModel = textArray[5];
+          session.session_data.vehicleModel = textArray[5];
           const planType = textArray[3] === '1' ? 'Third Party' : 'Comprehensive';
           const premium = textArray[3] === '1' ? 5000 : 25000;
-          response = `CON Vehicle: ${session.data.vehicleReg}\nModel: ${session.data.vehicleModel}\nPlan: ${planType}\nPremium: KES ${premium}/year\n\n1. Confirm & Pay\n2. Cancel`;
-          return makeResult(response, 'buy', true, { session_data: session.data });
+          response = `CON Vehicle: ${session.session_data.vehicleReg}\nModel: ${session.session_data.vehicleModel}\nPlan: ${planType}\nPremium: KES ${premium}/year\n\n1. Confirm & Pay\n2. Cancel`;
+          return makeResult(response, 'buy', true, { session_data: session.session_data });
         } else if (level === 7) {
           if (textArray[6] === '1') {
             response = `CON Select payment method:\n1. M-PESA\n2. Airtel Money\n0. Back`;
@@ -243,23 +288,15 @@ class USSDService {
             return makeResult(response, 'end', false);
           }
         } else if (level === 8) {
-          const policyNumber = 'POL' + Date.now();
-          const userRec = session.data.authenticatedUser;
+          const userRec = session.session_data.authenticatedUser;
           const planType = textArray[3] === '1' ? 'Third Party' : 'Comprehensive';
           const premium = textArray[3] === '1' ? 5000 : 25000;
-          if (!policies[userRec.accountNumber]) policies[userRec.accountNumber] = [];
-          policies[userRec.accountNumber].push({
-            policyNumber,
-            type: 'Motor Insurance',
-            plan: planType,
-            premium: premium,
-            vehicleReg: session.data.vehicleReg,
-            vehicleModel: session.data.vehicleModel,
-            status: 'Active',
-            startDate: new Date().toLocaleDateString()
-          });
-          response = `END Payment successful!\nPolicy Number: ${policyNumber}\nVehicle ${session.data.vehicleReg} is now insured.\nCertificate sent via SMS.`;
-          return makeResult(response, 'end', false, { session_data: session.data }, 'create_policy');
+
+          const dbPlan = await DataService.getPlanByCoverageType('standard'); // Fallback
+          const policy = await DataService.createPolicy(userRec.id, dbPlan ? dbPlan.id : 'motor-plan-id', premium, premium * 50);
+
+          response = `END Payment successful!\nPolicy Number: ${policy.policy_number}\nVehicle ${session.session_data.vehicleReg} is now insured.\nCertificate sent via SMS.`;
+          return makeResult(response, 'end', false, { session_data: session.session_data });
         }
       }
       if (textArray[2] === '0') {
@@ -275,30 +312,35 @@ class USSDService {
         return makeResult(response, 'policies', true);
       } else if (level === 2) {
         const pin = textArray[1];
-        const user = await DataService.getOrCreateUser(phoneNumber);
-        if (!user) {
-          response = `END Incorrect PIN or not registered.`;
+        if (pin === 'AUTH_SESSION' && session.session_data.authenticated) {
+          session.session_data.authenticatedUser = session.session_data.user;
+        } else {
+          const user = await DataService.getOrCreateUser(phoneNumber);
+          if (!user || user.pin !== pin) {
+            response = `END Incorrect PIN or not registered.`;
+            return makeResult(response, 'end', false);
+          }
+          session.session_data.authenticatedUser = user;
+        }
+
+        const currentUser = session.session_data.authenticatedUser;
+        const userPolicies = await DataService.getUserActivePolicies(currentUser.id);
+
+        if (userPolicies.length === 0) {
+          response = `END You have no active policies.\nDial ${serviceCode} to buy insurance.`;
           return makeResult(response, 'end', false);
         } else {
-          session.session_data.authenticatedUser = user;
-          const userPolicies = await DataService.getUserActivePolicies(user.id);
-
-          if (userPolicies.length === 0) {
-            response = `END You have no active policies.\nDial ${serviceCode} to buy insurance.`;
-            return makeResult(response, 'end', false);
-          } else {
-            let policyList = 'CON Your Active Policies:\n';
-            userPolicies.forEach((policy, index) => {
-              policyList += `${index + 1}. ${policy.plan?.name || 'Policy'} - ${policy.policy_number}\n`;
-            });
-            policyList += '0. Back';
-            response = policyList;
-            return makeResult(response, 'policies', true, { session_data: session.session_data });
-          }
+          let policyList = 'CON Your Active Policies:\n';
+          userPolicies.forEach((policy, index) => {
+            policyList += `${index + 1}. ${policy.plan?.name || 'Policy'} - ${policy.policy_number}\n`;
+          });
+          policyList += '0. Back';
+          response = policyList;
+          return makeResult(response, 'policies', true, { session_data: session.session_data });
         }
       } else if (level === 3) {
-        const userRec = session.session_data.authenticatedUser;
-        const userPolicies = await DataService.getUserActivePolicies(userRec.id);
+        const currentUser = session.session_data.authenticatedUser;
+        const userPolicies = await DataService.getUserActivePolicies(currentUser.id);
         const selectedIndex = parseInt(textArray[2]) - 1;
 
         if (selectedIndex >= 0 && selectedIndex < userPolicies.length) {
@@ -319,26 +361,30 @@ class USSDService {
         return makeResult(response, 'claim', true);
       } else if (level === 2) {
         const pin = textArray[1];
-        const user = await DataService.getOrCreateUser(phoneNumber);
-        if (!user) {
-          response = `END Incorrect PIN or not registered.`;
+        if (pin === 'AUTH_SESSION' && session.session_data.authenticated) {
+          session.session_data.authenticatedUser = session.session_data.user;
+        } else {
+          const user = await DataService.getOrCreateUser(phoneNumber);
+          if (!user || user.pin !== pin) {
+            response = `END Incorrect PIN or not registered.`;
+            return makeResult(response, 'end', false);
+          }
+          session.session_data.authenticatedUser = user;
+        }
+
+        const currentUser = session.session_data.authenticatedUser;
+        const userPolicies = await DataService.getUserActivePolicies(currentUser.id);
+        if (userPolicies.length === 0) {
+          response = `END You have no active policies to claim.`;
           return makeResult(response, 'end', false);
         } else {
-          session.session_data.authenticatedUser = user;
-          const userPolicies = await DataService.getUserActivePolicies(user.id);
-
-          if (userPolicies.length === 0) {
-            response = `END You have no active policies to claim.`;
-            return makeResult(response, 'end', false);
-          } else {
-            let policyList = 'CON Select policy to claim:\n';
-            userPolicies.forEach((policy, index) => {
-              policyList += `${index + 1}. ${policy.plan?.name || 'Policy'} - ${policy.policy_number}\n`;
-            });
-            policyList += '0. Back';
-            response = policyList;
-            return makeResult(response, 'claim', true, { session_data: session.session_data });
-          }
+          let policyList = 'CON Select policy to claim:\n';
+          userPolicies.forEach((policy, index) => {
+            policyList += `${index + 1}. ${policy.plan?.name || 'Policy'} - ${policy.policy_number}\n`;
+          });
+          policyList += '0. Back';
+          response = policyList;
+          return makeResult(response, 'claim', true, { session_data: session.session_data });
         }
       } else if (level === 3) {
         session.session_data.selectedPolicyIndex = parseInt(textArray[2]) - 1;
@@ -358,11 +404,6 @@ class USSDService {
         return makeResult(response, 'claim', true, { session_data: session.session_data });
       } else if (level === 7) {
         const claimRef = 'CLM' + Date.now();
-        const userRec = session.session_data.authenticatedUser;
-        const userPolicies = await DataService.getUserActivePolicies(userRec.id);
-        const policy = userPolicies[session.session_data.selectedPolicyIndex];
-
-        // Claim logic (usually involves a Claims table, but for now we'll just return success)
         response = `END Claim submitted successfully!\nClaim Reference: ${claimRef}\nExpected response: 48 hours\n\nRequired documents:\n- Hospital invoice\n- ID copy\n- Police report (if applicable)\n\nSend to WhatsApp: +254700123456\nEmail: claims@safecover.co.ke`;
         return makeResult(response, 'end', false, { session_data: session.session_data });
       }
@@ -370,37 +411,43 @@ class USSDService {
 
     // PAY PREMIUM FLOW
     if (textArray[0] === '5') {
+      console.log(`[USSDService] Entering PAY PREMIUM FLOW. level: ${level}, type: ${typeof level}`);
       if (level === 1) {
         response = `CON Enter your 4-digit PIN:`;
         return makeResult(response, 'pay', true);
       } else if (level === 2) {
         const pin = textArray[1];
-        const user = await DataService.getOrCreateUser(phoneNumber);
-        if (!user) {
-          response = `END Incorrect PIN or not registered.`;
+        if (pin === 'AUTH_SESSION' && session.session_data.authenticated) {
+          session.session_data.authenticatedUser = session.session_data.user;
+        } else {
+          const user = await DataService.getOrCreateUser(phoneNumber);
+          if (!user || user.pin !== pin) {
+            response = `END Incorrect PIN or not registered.`;
+            return makeResult(response, 'end', false);
+          }
+          session.session_data.authenticatedUser = user;
+        }
+
+        const currentUser = session.session_data.authenticatedUser;
+        const userPolicies = await DataService.getUserActivePolicies(currentUser.id);
+        if (userPolicies.length === 0) {
+          response = `END You have no policies requiring payment.`;
           return makeResult(response, 'end', false);
         } else {
-          session.session_data.authenticatedUser = user;
-          const userPolicies = await DataService.getUserActivePolicies(user.id);
-          if (userPolicies.length === 0) {
-            response = `END You have no policies requiring payment.`;
-            return makeResult(response, 'end', false);
-          } else {
-            let paymentList = 'CON Outstanding Premiums:\n';
-            let totalDue = 0;
-            userPolicies.forEach((policy, index) => {
-              paymentList += `${index + 1}. ${policy.plan?.name || 'Policy'} - KES ${policy.premium}\n`;
-              totalDue += policy.premium;
-            });
-            paymentList += `${userPolicies.length + 1}. Pay All - KES ${totalDue}\n`;
-            paymentList += '0. Back';
-            response = paymentList;
-            return makeResult(response, 'pay', true, { session_data: session.session_data });
-          }
+          let paymentList = 'CON Outstanding Premiums:\n';
+          let totalDue = 0;
+          userPolicies.forEach((policy, index) => {
+            paymentList += `${index + 1}. ${policy.plan?.name || 'Policy'} - KES ${policy.premium}\n`;
+            totalDue += policy.premium;
+          });
+          paymentList += `${userPolicies.length + 1}. Pay All - KES ${totalDue}\n`;
+          paymentList += '0. Back';
+          response = paymentList;
+          return makeResult(response, 'pay', true, { session_data: session.session_data });
         }
       } else if (level === 3) {
-        const userRec = session.session_data.authenticatedUser;
-        const userPolicies = await DataService.getUserActivePolicies(userRec.id);
+        const currentUser = session.session_data.authenticatedUser;
+        const userPolicies = await DataService.getUserActivePolicies(currentUser.id);
         const selection = parseInt(textArray[2]);
         if (selection === userPolicies.length + 1) {
           const total = userPolicies.reduce((sum, p) => sum + p.premium, 0);
@@ -413,9 +460,6 @@ class USSDService {
           session.session_data.paymentPolicy = policy;
           response = `CON Pay KES ${policy.premium} for ${policy.plan?.name || 'Policy'}?\nPolicy: ${policy.policy_number}\n\n1. Confirm & Pay\n2. Cancel`;
           return makeResult(response, 'pay', true, { session_data: session.session_data });
-        } else {
-          response = `END Invalid selection.`;
-          return makeResult(response, 'end', false);
         }
       } else if (level === 4) {
         if (textArray[3] === '1') {
@@ -426,10 +470,48 @@ class USSDService {
           return makeResult(response, 'end', false);
         }
       } else if (level === 5) {
-        const receiptNo = 'RCP' + Date.now();
-        // Payment recording (simplified)
-        response = `END Payment of KES ${session.session_data.paymentAmount} successful!\nReceipt No: ${receiptNo}\nNext due: ${new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toLocaleDateString()}\n\nSMS receipt sent to ${phoneNumber}`;
-        return makeResult(response, 'end', false, { session_data: session.session_data });
+        console.log(`[USSDService] Entering level 5. session_data: ${JSON.stringify(session.session_data)}`);
+        // Initiate Real Flutterwave Payment
+        try {
+          const transactionId = uuidv4();
+          const amount = session.session_data.paymentAmount;
+          const currentUser = session.session_data.authenticatedUser;
+          const policy = session.session_data.paymentPolicy;
+
+          // 1. Create payment record
+          await DataService.createPayment(
+            currentUser.id,
+            policy ? policy.id : null,
+            amount,
+            'flutterwave',
+            transactionId
+          );
+
+          // 2. Initiate STK Push via Flutterwave
+          const flwResult = await FlutterwaveService.initiateMobileMoneyPayment(
+            phoneNumber,
+            amount,
+            transactionId,
+            currentUser.email || (phoneNumber + '@ussd-insurance.com'),
+            currentUser.name
+          );
+
+          if (flwResult.success) {
+            // Attach FLW reference
+            if (flwResult.flwRef) {
+              await DataService.attachFlwRef(transactionId, flwResult.flwRef);
+            }
+            response = `END Payment of KES ${amount} initiated.\nPlease check your phone for the M-PESA STK push to complete the payment.`;
+          } else {
+            response = `END Payment initiation failed: ${flwResult.message || 'Unknown error'}.\nPlease try again later.`;
+          }
+
+          return makeResult(response, 'end', false, { session_data: session.session_data });
+        } catch (error) {
+          console.error('USSD Payment Error:', error);
+          response = `END Sorry, we encountered an error while processing your payment. Please try again later.`;
+          return makeResult(response, 'end', false);
+        }
       }
     }
 
@@ -457,17 +539,23 @@ class USSDService {
         return makeResult(response, 'balance', true);
       } else if (level === 2) {
         const pin = textArray[1];
-        const user = await DataService.getOrCreateUser(phoneNumber);
-        if (!user) {
-          response = `END Incorrect PIN or not registered.`;
-          return makeResult(response, 'end', false);
+        if (pin === 'AUTH_SESSION' && session.session_data.authenticated) {
+          session.session_data.authenticatedUser = session.session_data.user;
         } else {
-          const userPolicies = await DataService.getUserActivePolicies(user.id);
-          const totalCoverage = userPolicies.reduce((sum, p) => sum + (p.coverage_amount || 0), 0);
-          const pendingPremiums = userPolicies.reduce((sum, p) => sum + p.premium, 0);
-          response = `END Account Summary:\nAccount: ${user.id.substring(0, 8)}\nActive Policies: ${userPolicies.length}\nTotal Coverage: KES ${totalCoverage}\n\nPending Premiums: KES ${pendingPremiums}\n\nDial ${serviceCode} for more options.`;
-          return makeResult(response, 'end', false);
+          const user = await DataService.getOrCreateUser(phoneNumber);
+          if (!user || user.pin !== pin) {
+            response = `END Incorrect PIN or not registered.`;
+            return makeResult(response, 'end', false);
+          }
+          session.session_data.authenticatedUser = user;
         }
+
+        const currentUser = session.session_data.authenticatedUser;
+        const userPolicies = await DataService.getUserActivePolicies(currentUser.id);
+        const totalCoverage = userPolicies.reduce((sum, p) => sum + (p.coverage_amount || 0), 0);
+        const pendingPremiums = userPolicies.reduce((sum, p) => sum + p.premium, 0);
+        response = `END Account Summary:\nAccount: ${currentUser.id.substring(0, 8)}\nActive Policies: ${userPolicies.length}\nTotal Coverage: KES ${totalCoverage}\n\nPending Premiums: KES ${pendingPremiums}\n\nDial ${serviceCode} for more options.`;
+        return makeResult(response, 'end', false);
       }
     }
 
@@ -484,7 +572,15 @@ class USSDService {
 
   // Keep compatibility helpers in case other modules call them
   static formatResponse(text) {
-    return String(text);
+    const response = String(text);
+    // Truncate long lines to 160 characters for USSD compatibility
+    return response.split('\n').map(line => line.length > 160 ? line.substring(0, 160) : line).join('\n');
+  }
+
+  static recommendPlan(premium) {
+    if (premium < 100) return { type: 'basic', name: 'Basic Health' };
+    if (premium <= 300) return { type: 'standard', name: 'Standard Health' };
+    return { type: 'comprehensive', name: 'Comprehensive Health' };
   }
 
   static calculateRecommendedCoverage(premium, multiplier = 500) {

@@ -1,6 +1,5 @@
 const USSDService = require('../services/USSDService');
 const DataService = require('../services/DataService');
-const MpesaService = require('../services/MpesaService');
 
 // In-memory storage (used for simplified USSD flow per user's request)
 const users = {};
@@ -22,13 +21,14 @@ class USSDController {
 
       const result = await USSDService.processUSSD(sessionId, phoneNumber, text);
 
-      // Save session updates if any
-      if (result.updates) {
-        await DataService.upsertSession(sessionId, phoneNumber, {
-          current_menu: result.nextMenu,
-          session_data: result.updates.session_data || {}
-        });
+      // Save session updates
+      const sessionUpdates = {
+        current_menu: result.nextMenu
+      };
+      if (result.updates?.session_data) {
+        sessionUpdates.session_data = result.updates.session_data;
       }
+      await DataService.upsertSession(sessionId, phoneNumber, sessionUpdates);
 
       res.set('Content-Type', 'text/plain');
       res.send(result.response);

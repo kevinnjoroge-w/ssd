@@ -12,7 +12,7 @@ class DataService {
   static async getOrCreateUser(phone, name = null) {
     try {
       let user = await User.query().findOne({ phone });
-      
+
       if (!user && name) {
         user = await User.query().insert({
           id: uuidv4(),
@@ -20,10 +20,24 @@ class DataService {
           name
         });
       }
-      
+
       return user;
     } catch (error) {
       console.error('User lookup error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get user by ID with relations
+   */
+  static async getUserById(id) {
+    try {
+      return await User.query()
+        .findById(id)
+        .withGraphFetched('[policies.plan, payments]');
+    } catch (error) {
+      console.error('User by ID lookup error:', error);
       throw error;
     }
   }
@@ -49,7 +63,7 @@ class DataService {
     try {
       console.log('[DataService] upsertSession called for', sessionId, 'with updates:', updates);
       let session = await Session.query().findOne({ session_id: sessionId });
-      
+
       if (session) {
         // Use a two-step approach to support sqlite which doesn't support RETURNING
         await Session.query()
@@ -110,7 +124,7 @@ class DataService {
   static async createPolicy(userId, planId, premium, coverageAmount) {
     try {
       const policyNumber = `POL-${Date.now()}-${uuidv4().substring(0, 8)}`;
-      
+
       return await Policy.query().insert({
         id: uuidv4(),
         user_id: userId,
@@ -168,25 +182,37 @@ class DataService {
   }
 
   /**
-   * Update payment status
+   * Update payment status (Enhanced for Flutterwave & M-Pesa)
    */
-  static async updatePaymentStatus(transactionId, status, mpesaReceipt, mpesaPhone) {
+  static async updatePaymentStatus(transactionId, status, metadata = {}) {
     try {
-      // Support finding by transaction id OR merchant/checkout ids
       const patchData = {
         status,
-        mpesa_receipt: mpesaReceipt,
-        mpesa_phone: mpesaPhone,
-        paid_date: status === 'completed' ? new Date().toISOString() : null,
         updated_at: new Date().toISOString()
       };
 
+      if (status === 'completed') {
+        patchData.paid_date = new Date().toISOString();
+      }
+
+      // Merge additional metadata (receipts, refs, etc)
+      if (metadata.mpesaReceipt) patchData.mpesa_receipt = metadata.mpesaReceipt;
+      if (metadata.mpesaPhone) patchData.mpesa_phone = metadata.mpesaPhone;
+      if (metadata.flwRef) patchData.flw_ref = metadata.flwRef;
+
       await Payment.query().patch(patchData).where(builder => {
-        builder.where('transaction_id', transactionId).orWhere('merchant_request_id', transactionId).orWhere('checkout_request_id', transactionId);
+        builder.where('transaction_id', transactionId)
+          .orWhere('merchant_request_id', transactionId)
+          .orWhere('checkout_request_id', transactionId)
+          .orWhere('flw_ref', transactionId);
       });
 
-      // Return the updated payment
-      return await Payment.query().where('transaction_id', transactionId).orWhere('merchant_request_id', transactionId).orWhere('checkout_request_id', transactionId).first();
+      return await Payment.query().where(builder => {
+        builder.where('transaction_id', transactionId)
+          .orWhere('merchant_request_id', transactionId)
+          .orWhere('checkout_request_id', transactionId)
+          .orWhere('flw_ref', transactionId);
+      }).first();
     } catch (error) {
       console.error('Payment update error:', error);
       throw error;
@@ -194,20 +220,41 @@ class DataService {
   }
 
   /**
-   * Attach M-Pesa IDs to an existing payment record
+   * Attach Flutterwave reference
    */
-  static async attachMpesaIds(transactionId, checkoutRequestId, merchantRequestId) {
+  static async attachFlwRef(transactionId, flwRef) {
     try {
-      const patch = {};
-      if (checkoutRequestId) patch.checkout_request_id = checkoutRequestId;
-      if (merchantRequestId) patch.merchant_request_id = merchantRequestId;
-      patch.updated_at = new Date().toISOString();
-
-      await Payment.query().patch(patch).where('transaction_id', transactionId);
+      await Payment.query()
+        .patch({ flw_ref: flwRef, updated_at: new Date().toISOString() })
+        .where('transaction_id', transactionId);
 
       return await Payment.query().findOne({ transaction_id: transactionId });
     } catch (error) {
-      console.error('Attach M-Pesa IDs error:', error);
+      console.error('Attach FLW Ref error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get payment by transaction ID
+   */
+  static async getPaymentByTransactionId(transactionId) {
+    try {
+      return await Payment.query().where('transaction_id', transactionId).first();
+    } catch (error) {
+      console.error('Get payment error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get payment by Flutterwave reference
+   */
+  static async getPaymentByFlwRef(flwRef) {
+    try {
+      return await Payment.query().where('flw_ref', flwRef).first();
+    } catch (error) {
+      console.error('Get payment by flw_ref error:', error);
       throw error;
     }
   }

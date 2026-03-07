@@ -5,6 +5,10 @@ class Session extends Model {
     return 'sessions';
   }
 
+  static get jsonAttributes() {
+    return ['session_data'];
+  }
+
   static get jsonSchema() {
     return {
       type: 'object',

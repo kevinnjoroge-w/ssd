@@ -1,5 +1,6 @@
 const DataService = require('../services/DataService');
 const AuthMiddleware = require('../middleware/auth');
+const bcrypt = require('bcryptjs');
 const { v4: uuidv4 } = require('uuid');
 
 class UserController {
@@ -23,7 +24,10 @@ class UserController {
             if (occupation) updates.occupation = occupation;
             if (income_range) updates.income_range = income_range;
             if (preferred_language) updates.preferred_language = preferred_language;
-            // Note: In a real app we'd handle password hashing here
+
+            if (password) {
+                updates.password = await bcrypt.hash(password, 10);
+            }
 
             if (Object.keys(updates).length > 0) {
                 user = await DataService.updateUserProfile(user.id, updates);
@@ -60,7 +64,17 @@ class UserController {
                 return res.status(401).json({ error: 'User not found' });
             }
 
-            // In a real app, verify password here
+            // Verify password
+            if (user.password && password) {
+                const isMatch = await bcrypt.compare(password, user.password);
+                if (!isMatch) {
+                    return res.status(401).json({ error: 'Invalid credentials' });
+                }
+            } else if (password) {
+                // If user has no password yet (registered via USSD but now logging in via Web)
+                // We might want to handle this differently, but for now reject
+                return res.status(401).json({ error: 'No password set for this account. Please register.' });
+            }
 
             const token = AuthMiddleware.generateToken(user.id);
 
@@ -83,11 +97,7 @@ class UserController {
     static async getMe(req, res) {
         try {
             const { userId } = req.user;
-            const user = await DataService.getOrCreateUser(null, null); // This is a bit hacky, let's add a findById to DataService
-
-            // I'll need to add a findById method to DataService or use Objection directly
-            const User = require('../models/User');
-            const userData = await User.query().findById(userId).withGraphFetched('[policies.plan, payments]');
+            const userData = await DataService.getUserById(userId);
 
             if (!userData) {
                 return res.status(404).json({ error: 'User not found' });

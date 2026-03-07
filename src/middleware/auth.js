@@ -29,6 +29,11 @@ class AuthMiddleware {
    */
   static async isAdmin(req, res, next) {
     try {
+      // If role is already in the token, we can use it directly
+      if (req.user && req.user.role === 'admin') {
+        return next();
+      }
+
       const User = require('../models/User');
       const user = await User.query().findById(req.user.userId);
 
@@ -38,18 +43,47 @@ class AuthMiddleware {
         });
       }
 
+      // Cache role in req.user for subsequent middleware
+      req.user.role = user.role;
       next();
     } catch (error) {
+      console.error('Admin verification error:', error);
       res.status(500).json({ error: 'Failed to verify admin status' });
+    }
+  }
+
+  /**
+   * Authorize user to access their own data or allow admin
+   */
+  static authorizeUser(req, res, next) {
+    try {
+      const { userId } = req.params;
+      const bodyUserId = req.body.userId;
+      const authenticatedUserId = req.user.userId;
+      const isAdmin = req.user.role === 'admin';
+
+      // Check if the user is accessing their own data or is an admin
+      const isOwner = (userId && userId === authenticatedUserId) ||
+        (bodyUserId && bodyUserId === authenticatedUserId);
+
+      if (!isOwner && !isAdmin) {
+        return res.status(403).json({
+          error: 'Access denied. You can only access your own data.'
+        });
+      }
+
+      next();
+    } catch (error) {
+      res.status(500).json({ error: 'Authorization check failed' });
     }
   }
 
   /**
    * Generate JWT token
    */
-  static generateToken(userId) {
+  static generateToken(userId, role = 'user') {
     return jwt.sign(
-      { userId },
+      { userId, role },
       process.env.JWT_SECRET,
       { expiresIn: process.env.JWT_EXPIRY || '7d' }
     );

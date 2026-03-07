@@ -13,7 +13,7 @@ class Policy extends Model {
         id: { type: 'string' },
         user_id: { type: 'string' },
         plan_id: { type: 'string' },
-        policy_number: { type: 'string', unique: true },
+        policy_number: { type: 'string' },
         premium: { type: 'number', minimum: 50 },
         coverage_amount: { type: 'number' },
         status: { type: 'string' }, // active, inactive, expired, claimed

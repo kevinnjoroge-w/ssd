@@ -1,7 +1,26 @@
 const request = require('supertest');
 const app = require('../src/server');
+const AuthMiddleware = require('../src/middleware/auth');
+const MpesaService = require('../src/services/MpesaService');
+
+// Mock MpesaService
+jest.mock('../src/services/MpesaService', () => ({
+  initiateStkPush: jest.fn().mockResolvedValue({
+    success: true,
+    data: {
+      CheckoutRequestID: 'ws_CO_0000000000000000000000',
+      MerchantRequestID: '12345-67890-1'
+    }
+  }),
+  getAccessToken: jest.fn().mockResolvedValue('mock-token'),
+  validateCallback: jest.fn().mockReturnValue(true),
+  processCallback: jest.fn().mockReturnValue({ resultCode: 0 }),
+  checkStkPushStatus: jest.fn().mockResolvedValue({ status: 'Success' })
+}));
 
 describe('USSD Insurance App - Integration Tests', () => {
+  const testUserId = '550e8400-e29b-41d4-a716-446655440000';
+  const testToken = AuthMiddleware.generateToken(testUserId);
 
   // USSD Endpoint Tests
   describe('USSD Endpoints', () => {
@@ -28,7 +47,7 @@ describe('USSD Insurance App - Integration Tests', () => {
           text: '*123#'
         });
 
-      expect(response.status).toBeGreaterThanOrEqual(400);
+      expect(response.status).toBe(400);
     });
 
     test('POST /api/ussd - Should reject missing sessionId', async () => {
@@ -39,7 +58,7 @@ describe('USSD Insurance App - Integration Tests', () => {
           text: '*123#'
         });
 
-      expect(response.status).toBeGreaterThanOrEqual(400);
+      expect(response.status).toBe(400);
       expect(response.body).toHaveProperty('error');
     });
 
@@ -72,14 +91,15 @@ describe('USSD Insurance App - Integration Tests', () => {
     test('POST /api/payments/mpesa/initiate - Should initiate payment', async () => {
       const response = await request(app)
         .post('/api/payments/mpesa/initiate')
+        .set('Authorization', `Bearer ${testToken}`)
         .send({
-          userId: '550e8400-e29b-41d4-a716-446655440000',
+          userId: testUserId,
           amount: 100,
           phoneNumber: '+254712345678',
           description: 'Test Payment'
         });
 
-      expect(response.status).toBeGreaterThanOrEqual(200);
+      expect(response.status).toBe(200);
       if (response.status === 200 && response.body.success) {
         expect(response.body.data).toHaveProperty('checkoutRequestId');
         expect(response.body.data).toHaveProperty('transactionId');
@@ -89,24 +109,26 @@ describe('USSD Insurance App - Integration Tests', () => {
     test('POST /api/payments/mpesa/initiate - Should reject invalid amount', async () => {
       const response = await request(app)
         .post('/api/payments/mpesa/initiate')
+        .set('Authorization', `Bearer ${testToken}`)
         .send({
-          userId: '550e8400-e29b-41d4-a716-446655440000',
+          userId: testUserId,
           amount: -100,
           phoneNumber: '+254712345678'
         });
 
-      expect(response.status).toBeGreaterThanOrEqual(400);
+      expect(response.status).toBe(400);
     });
 
     test('POST /api/payments/mpesa/initiate - Should reject missing fields', async () => {
       const response = await request(app)
         .post('/api/payments/mpesa/initiate')
+        .set('Authorization', `Bearer ${testToken}`)
         .send({
           amount: 100,
           phoneNumber: '+254712345678'
         });
 
-      expect(response.status).toBeGreaterThanOrEqual(400);
+      expect(response.status).toBe(400);
     });
   });
 

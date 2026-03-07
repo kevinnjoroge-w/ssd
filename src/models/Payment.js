@@ -18,6 +18,9 @@ class Payment extends Model {
         payment_method: { type: 'string' }, // 'mpesa', 'bank_transfer'
         status: { type: 'string' }, // 'pending', 'completed', 'failed'
         transaction_id: { type: 'string' },
+        flw_ref: { type: 'string' },
+        checkout_request_id: { type: 'string' },
+        merchant_request_id: { type: 'string' },
         mpesa_receipt: { type: 'string' },
         mpesa_phone: { type: 'string' },
         period: { type: 'string' }, // monthly, quarterly, yearly

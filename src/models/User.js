@@ -21,6 +21,8 @@ class User extends Model {
         income_range: { type: 'string' }, // 'low', 'medium', 'high'
         preferred_language: { type: 'string', default: 'en' }, // 'en' or 'sw'
         role: { type: 'string', default: 'customer' }, // 'customer' or 'admin'
+        pin: { type: 'string', minLength: 4, maxLength: 4 },
+        password: { type: 'string' },
         created_at: { type: 'string', format: 'date-time' },
         updated_at: { type: 'string', format: 'date-time' }
       }

@@ -13,6 +13,7 @@ const planRoutes = require('./routes/plans');
 const analyticsRoutes = require('./routes/analytics');
 const policyRoutes = require('./routes/policies');
 const AfricasTalkingController = require('./controllers/AfricasTalkingController');
+const AuthMiddleware = require('./middleware/auth');
 
 // Initialize Express app
 const app = express();
@@ -56,10 +57,10 @@ app.get('/', (req, res) => {
 
 // Africa's Talking USSD Test Endpoint (for development)
 // Simulate an AT USSD request
-app.post('/api/ussd/test/simulate', AfricasTalkingController.simulateUSSDRequest);
+app.post('/api/ussd/test/simulate', AuthMiddleware.verify, AuthMiddleware.isAdmin, AfricasTalkingController.simulateUSSDRequest);
 
 // Get session details (for debugging)
-app.get('/api/ussd/session/:sessionId', AfricasTalkingController.getSessionDetails);
+app.get('/api/ussd/session/:sessionId', AuthMiddleware.verify, AuthMiddleware.isAdmin, AfricasTalkingController.getSessionDetails);
 
 // 404 Handler
 app.use((req, res) => {
