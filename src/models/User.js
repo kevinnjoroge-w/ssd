@@ -20,6 +20,7 @@ class User extends Model {
         occupation: { type: 'string' },
         income_range: { type: 'string' }, // 'low', 'medium', 'high'
         preferred_language: { type: 'string', default: 'en' }, // 'en' or 'sw'
+        role: { type: 'string', default: 'customer' }, // 'customer' or 'admin'
         created_at: { type: 'string', format: 'date-time' },
         updated_at: { type: 'string', format: 'date-time' }
       }

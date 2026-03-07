@@ -23,16 +23,16 @@
         <div class='clearfix'>
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">5.68% </span>
+                <span class="strong">5.31% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>5/88</span>
+                <span class='fraction'>5/94</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Branches</span>
-                <span class='fraction'>0/47</span>
+                <span class='fraction'>0/51</span>
             </div>
         
             
@@ -44,9 +44,9 @@
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">5.74% </span>
+                <span class="strong">5.37% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>5/87</span>
+                <span class='fraction'>5/93</span>
             </div>
         
             
@@ -326,7 +326,19 @@
 <a name='L261'></a><a href='#L261'>261</a>
 <a name='L262'></a><a href='#L262'>262</a>
 <a name='L263'></a><a href='#L263'>263</a>
-<a name='L264'></a><a href='#L264'>264</a></td><td class="line-coverage quiet"><span class="cline-any cline-yes">1x</span>
+<a name='L264'></a><a href='#L264'>264</a>
+<a name='L265'></a><a href='#L265'>265</a>
+<a name='L266'></a><a href='#L266'>266</a>
+<a name='L267'></a><a href='#L267'>267</a>
+<a name='L268'></a><a href='#L268'>268</a>
+<a name='L269'></a><a href='#L269'>269</a>
+<a name='L270'></a><a href='#L270'>270</a>
+<a name='L271'></a><a href='#L271'>271</a>
+<a name='L272'></a><a href='#L272'>272</a>
+<a name='L273'></a><a href='#L273'>273</a>
+<a name='L274'></a><a href='#L274'>274</a>
+<a name='L275'></a><a href='#L275'>275</a>
+<a name='L276'></a><a href='#L276'>276</a></td><td class="line-coverage quiet"><span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-yes">1x</span>
@@ -500,9 +512,21 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
@@ -761,11 +785,23 @@ class AfricasTalkingController {
     } catch (error) {
 <span class="cstat-no" title="statement not covered" >      console.error('[Africa\'s Talking Error]', error);</span>
 &nbsp;
-      // Send error response
-      const errorResponse = <span class="cstat-no" title="statement not covered" >AfricasTalkingService.formatATResponse(</span>
-        'An error occurred. Please try again later or dial *123# to restart.',
-        false
-      );
+      // Try to persist an error state for this session so it can be resumed
+<span class="cstat-no" title="statement not covered" >      try {</span>
+<span class="cstat-no" title="statement not covered" >        if (sessionId &amp;&amp; phoneNumber) {</span>
+          const formattedPhoneErr = <span class="cstat-no" title="statement not covered" >AfricasTalkingService.formatPhoneNumber(phoneNumber);</span>
+<span class="cstat-no" title="statement not covered" >          await DataService.upsertSession(sessionId, formattedPhoneErr, {</span>
+            current_menu: 'error',
+            status: 'error',
+            updated_at: new Date().toISOString()
+          });
+        }
+      } catch (persistErr) {
+<span class="cstat-no" title="statement not covered" >        console.error('Failed to persist session error state:', persistErr);</span>
+      }
+&nbsp;
+      // Return a friendly retry prompt (keep session open so user can choose)
+        const friendlyMessage = <span class="cstat-no" title="statement not covered" >"Sorry, we couldn't complete your request right now.\n1. Try again\n2. Exit";</span>
+      const errorResponse = <span class="cstat-no" title="statement not covered" >AfricasTalkingService.formatATResponse(friendlyMessage, true);</span>
 &nbsp;
 <span class="cstat-no" title="statement not covered" >      res.set('Content-Type', 'text/plain');</span>
 <span class="cstat-no" title="statement not covered" >      res.send(errorResponse);</span>
@@ -859,7 +895,7 @@ module.exports = AfricasTalkingController;
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2026-01-21T13:00:48.960Z
+                at 2026-02-11T00:12:47.575Z
             </div>
         <script src="../../../prettify.js"></script>
         <script>

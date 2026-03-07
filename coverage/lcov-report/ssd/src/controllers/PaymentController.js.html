@@ -23,16 +23,16 @@
         <div class='clearfix'>
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">34.21% </span>
+                <span class="strong">30.95% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>13/38</span>
+                <span class='fraction'>13/42</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">31.57% </span>
+                <span class="strong">19.35% </span>
                 <span class="quiet">Branches</span>
-                <span class='fraction'>6/19</span>
+                <span class='fraction'>6/31</span>
             </div>
         
             
@@ -44,9 +44,9 @@
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">34.21% </span>
+                <span class="strong">30.95% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>13/38</span>
+                <span class='fraction'>13/42</span>
             </div>
         
             
@@ -195,20 +195,18 @@
 <a name='L130'></a><a href='#L130'>130</a>
 <a name='L131'></a><a href='#L131'>131</a>
 <a name='L132'></a><a href='#L132'>132</a>
-<a name='L133'></a><a href='#L133'>133</a></td><td class="line-coverage quiet"><span class="cline-any cline-yes">1x</span>
+<a name='L133'></a><a href='#L133'>133</a>
+<a name='L134'></a><a href='#L134'>134</a>
+<a name='L135'></a><a href='#L135'>135</a>
+<a name='L136'></a><a href='#L136'>136</a>
+<a name='L137'></a><a href='#L137'>137</a>
+<a name='L138'></a><a href='#L138'>138</a>
+<a name='L139'></a><a href='#L139'>139</a>
+<a name='L140'></a><a href='#L140'>140</a>
+<a name='L141'></a><a href='#L141'>141</a></td><td class="line-coverage quiet"><span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">4x</span>
-<span class="cline-any cline-yes">4x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">4x</span>
-<span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -216,13 +214,31 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">3x</span>
 <span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
@@ -236,8 +252,8 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">3x</span>
-<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -347,7 +363,7 @@ class PaymentController {
 &nbsp;
       // Create payment record
       const transactionId = uuidv4();
-      await DataService.createPayment(userId, policyId, amount, 'mpesa', transactionId);
+      const payment = await DataService.createPayment(userId, policyId, amount, 'mpesa', transactionId);
 &nbsp;
       // Initiate STK Push
       const stkResult = await MpesaService.initiateStkPush(
@@ -357,11 +373,19 @@ class PaymentController {
         description || <span class="branch-1 cbranch-no" title="branch not covered" >'Insurance Premium Payment'</span>
       );
 &nbsp;
+      // Attach M-Pesa identifiers to the payment record for later callback matching
+      const checkoutRequestId = <span class="cstat-no" title="statement not covered" >stkResult.data &amp;&amp; stkResult.data.CheckoutRequestID ? stkResult.data.CheckoutRequestID : stkResult.checkoutRequestId;</span>
+      const merchantRequestId = <span class="cstat-no" title="statement not covered" >stkResult.data &amp;&amp; stkResult.data.MerchantRequestID ? stkResult.data.MerchantRequestID : null;</span>
+&nbsp;
+<span class="cstat-no" title="statement not covered" >      if (checkoutRequestId || merchantRequestId) {</span>
+<span class="cstat-no" title="statement not covered" >        await DataService.attachMpesaIds(transactionId, checkoutRequestId, merchantRequestId);</span>
+      }
+&nbsp;
 <span class="cstat-no" title="statement not covered" >      res.json({</span>
         success: stkResult.success,
         message: stkResult.success ? 'STK push sent successfully' : 'Failed to send STK push',
         data: {
-          checkoutRequestId: stkResult.checkoutRequestId,
+          checkoutRequestId: checkoutRequestId,
           transactionId: transactionId,
           amount: amount,
           phoneNumber: phoneNumber
@@ -466,7 +490,7 @@ module.exports = PaymentController;
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2026-01-21T13:00:48.960Z
+                at 2026-02-11T00:12:47.575Z
             </div>
         <script src="../../../prettify.js"></script>
         <script>

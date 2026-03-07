@@ -1,21 +1,14 @@
 const express = require('express');
-const { v4: uuidv4 } = require('uuid');
+const UserController = require('../controllers/UserController');
+const AuthMiddleware = require('../middleware/auth');
 
 const router = express.Router();
 
-// Placeholder user routes
-router.get('/:userId', async (req, res) => {
-  res.json({
-    message: 'User endpoint',
-    userId: req.params.userId
-  });
-});
+// Registration and Login
+router.post('/register', UserController.register);
+router.post('/login', UserController.login);
 
-router.put('/:userId', async (req, res) => {
-  res.json({
-    message: 'User update endpoint',
-    userId: req.params.userId
-  });
-});
+// Profile
+router.get('/me', AuthMiddleware.verify, UserController.getMe);
 
 module.exports = router;

@@ -10,6 +10,8 @@ const ussdRoutes = require('./routes/ussd');
 const paymentRoutes = require('./routes/payments');
 const userRoutes = require('./routes/users');
 const planRoutes = require('./routes/plans');
+const analyticsRoutes = require('./routes/analytics');
+const policyRoutes = require('./routes/policies');
 const AfricasTalkingController = require('./controllers/AfricasTalkingController');
 
 // Initialize Express app
@@ -40,6 +42,8 @@ app.use('/api/ussd', ussdRoutes);
 app.use('/api/payments', paymentRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/plans', planRoutes);
+app.use('/api/analytics', analyticsRoutes);
+app.use('/api/policies', policyRoutes);
 
 // Root endpoint
 app.get('/', (req, res) => {
@@ -76,20 +80,22 @@ app.use((err, req, res, next) => {
 
 // Start Server
 const PORT = process.env.PORT || 3000;
-const server = app.listen(PORT, () => {
-  console.log(`✓ Server running on port ${PORT}`);
-  console.log(`✓ Environment: ${process.env.NODE_ENV || 'development'}`);
-});
+if (require.main === module) {
+  const server = app.listen(PORT, () => {
+    console.log(`✓ Server running on port ${PORT}`);
+    console.log(`✓ Environment: ${process.env.NODE_ENV || 'development'}`);
+  });
 
-// Handle server errors (e.g. port already in use)
-server.on('error', (err) => {
-  if (err && err.code === 'EADDRINUSE') {
-    console.error(`✗ Port ${PORT} is already in use.`);
-    console.error('Tip: On Windows run `netstat -ano | findstr :' + PORT + '` to find the PID, then `taskkill /PID <pid> /F` to free the port.');
+  // Handle server errors (e.g. port already in use)
+  server.on('error', (err) => {
+    if (err && err.code === 'EADDRINUSE') {
+      console.error(`✗ Port ${PORT} is already in use.`);
+      console.error('Tip: On Windows run `netstat -ano | findstr :' + PORT + '` to find the PID, then `taskkill /PID <pid> /F` to free the port.');
+      process.exit(1);
+    }
+    console.error('Server error:', err);
     process.exit(1);
-  }
-  console.error('Server error:', err);
-  process.exit(1);
-});
+  });
+}
 
 module.exports = app;
